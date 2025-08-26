@@ -16,7 +16,7 @@ The server will wrap the Worker Library to communicate with the CLI:
         - `Start()`, `Stop()`, `Status()`, `Output()`
     - Notes:
         - Will use a UUID package for the JOB ID. 
-        - When a command is started via `Start()` it will be given a context for timeout/deadline and termination signal for the `Stop()` function. The default timeout will be set to 1 minute and will not be adjustable from the CLI
+        - When a command is started via `Start()` it will be given a context for termination for the `Stop()` function. A default and configurable timeout for jobs would likely be a good feature to add in the future
     - Tests:
         - Simple unit tests for all functions, may also need to write a private `clear()` function to reset the map of jobs `jobMap` between tests. 
 2. **Server**
@@ -25,31 +25,32 @@ The server will wrap the Worker Library to communicate with the CLI:
         - Four endpoints: `/jobs/start`, `/jobs/stop/{id}`, `/jobs/status/{id}`, `/jobs/output/{id}`
         - `"/jobs/"` prefix included to delineate this API from other possible future tasks on server
     -  Data Structures: 
-        -  `User` struct with fields for `Username`, `Password`, and `Role`
-        -  `userMap map[string]User` a hardcoded map of `User` structs that are set to default values for this project
-        -  `rolePermissions map[string]map[string]bool` a hardcoded map to authorize commands based on `User.Role` field. 3 roles, `admin`, `user`, `viewer` with varying priveleges. This data structure will map roles to a map of actions
+        -  `Token` struct with fields for `Token string` and `Role string`
+        -  `tokenMap map[string]Token` a hardcoded map of `Token` structs that are set to default values for this project
+        -  `rolePermissions map[string]map[string]bool` a hardcoded map to authorize commands based on `Token.Role` field. 3 roles, `admin`, `user`, `viewer` with varying priveleges. This data structure will map roles to a map of `action string -> isAuthz bool` that can be performed by the role
         -  Server file may have various structs for sending and receiving JSON to and from client
         -  `mux` a multiplexer to route API using `http.NewServeMux()`
     - Functions: 
         - `handleStartJob(w http.ResponseWriter, r *http.Request)`, `handleStopJob()`, `handleGetJobStatus()`, `handleGetJobOutput()` Helper functions to handle the job library functions. Errors are handled using the `ResponseWriter` 
-        - `basicAuthenticate(r *http.Request) (string, bool)` Authenticate function using the `bcrypt` library which checks if user exists, hashes incoming http password, compares hashed password to stored hashed password, and returns (username, ok)
-        - `authorize(username, task string) bool` Performs a simple check which compares the user's role to the allowed roles in the permission: `userMap[username].Role`  
-        - `authenticateMiddleware(next http.Handler) http.Handler` Authenticates user and adds username as context to `http.Request` to be used by authorization middleware
-        - `authorizationMiddleware(action string)` Authorizes user (username passed using http Request context) to perform action
+        - `authenticate(r *http.Request) (string, bool)` Authenticate function which extracts the token and checks if it is in the `tokenMap`
+        - `authorize(username, task string) bool` Performs a check which compares the Token's `Role` field to the allowed roles in the `rolePermissions` map and compares that to the input variable `task` 
+        - `authMiddleware(action string)` Extracts token from header, checks if it is authenticated, then checks if it is authorized to perform `action` and then calls the next route
     -  Authentication:
-        - This project will use Basic authentication by checking the HTTP header's Basic field for a username, finding the `User` in `userMap`, passing the password through a cryptographic hash function using bcrypt library, and comparing that to the stored user's password hash
-        - Ideally username/password would be stored in a database with the password salted + hashed, but in this project demo user's password hashes will be premade and hardcoded (to match the user's hashed password).
+        - This project will use Bearer Token authentication by checking the HTTP header's Bearer field for a `Token` and finding the `Token` in `tokenMap`
     - Authorization:
         - The server will maintain a hardcoded `rolePermissions` map in the format `{Permission Level : {job : isAllowed}}`, for example `{"admin" : {"start" : true, "stop" : true, "status" : true, "output : true"}}, {"user" : {"start" : true, "stop" : false, "status" : true, "output" : true}}` 
-        - Every issued command will be authorized via a helper function based on the user's username: retrieve `User.Role` field from `userMap[username]` and check if the command to be executed is in the corresponding `rolePermissions` map  
+        - Every issued command will be authorized via a helper function based on the `Token`, which will retrieve `Token.Role` field from `tokenMap` and check if the command to be executed is in the corresponding `rolePermissions` map  
     - Auth Middleware:
-        - The multiplexer will run middleware on every request before routing it to the handleJob helper functions. There will be four routes (for each of the four endpoints) and the authorizationMiddleware will be hardcoded with the appropriate `action` to validate if user can perform action. Shorthand example  for route `/jobs/start` : `authenticateMiddleware(authorizeMiddleware('start')...handleStartJob)`
+        - The multiplexer will run middleware on every request before routing it to the handleJob helper functions. There will be four routes (for each of the four endpoints) and the authMiddleware will be hardcoded with the appropriate `action` to validate if user can perform action. Shorthand example for route `/jobs/start` : `authMiddleware('start')(http.HandlerFunc(handleStartJob))`
+        - To only parse the Token from the header once, the authorization and authentication will be combined in to one middleware function  
     - HTTPS:
-        - Generate and hard code self signed certificate and a key and put that in the repo, the client will set `tls.Config.InsecureSkipVerify` to `true`
-    - Auth Workflow: After TLS handshake, client makes request to server with Basic Authentication credentials in HTTP header, server multiplexer directs route and uses middleware to authenticate -> authorize -> execute command, then returns response to client. 
+        - Generate and hard code self signed certificate and key and put that in the repo, the client will set `tls.Config.InsecureSkipVerify` to `true`
+    - Auth Workflow: After TLS handshake, client makes request to server with Bearer Token credentials in HTTP header, server multiplexer directs route and uses middleware to authenticate -> authorize -> execute command, then returns response to client. 
     - Error handling: Errors will be descriptive and passed back to the client using the http Writer
 3. **Client**
-
+    - Data Structures:
+    - Functions:
+    - UX:
 ## Scope 
 
 ## Proposed API 
