@@ -15,36 +15,31 @@
     - Functions to perform tasks from the API (all public):
         - `Start()`, `Stop()`, `Status()`, `Output()`
     - Notes:
-        - Will use Google's UUID package for generating job ID's 
+        - Will use Google's UUID package for generating job IDs 
         - When a command is started via `Start()` it will be given a context with cancel for termination in the `Stop()` function
         - Will lock `jobMap` appropriately to prevent data races but allow concurrent reads
 2. **Server**
     -  Data Structures: 
         -  `User` struct with fields for `TokenID string` and `Role string`
         -  `userMap map[string]User` map of users where key is `TokenID`
-        -  `rolePermissions map[string]map[string]bool` a map to authorize api actions based on `User.role` 
-        -  `commandPermissions map[string][]string` maps `User.role` to a list of linux commands that role can run
+        -  `rolePermissions map[string]map[string]bool` a map to authorize api actions based on `User.role`. First key is role, second key is action, for example: `{role : {start : true, stop : false}`
         -  `mux` a multiplexer to route API using `http.NewServeMux()`
     - Functions: 
         - `handleStartJob(w http.ResponseWriter, r *http.Request)`, `handleStopJob()`, `handleGetJobStatus()`, `handleGetJobOutput()`: helper functions for handling parsing args and executing job tasks
         - `authenticate(r *http.Request) bool` Authenticate function which extracts the token and checks if it is in the `userMap`
-        - `authorizeAction(role, action string) bool` Checks if a user can perform an api action (start, stop)
-        - `authorizeCommand(role, command string) bool` Checks if a linux command is allowed for a given role
+        - `authorize(role, action string) bool` Checks if a role can perform an api action (start, stop)
         - `authMiddleware(action string)` Authenticates user and authorizes action (but not command)
     - Auth Workflow Overview: 
-        - TLS handshake -> client makes request to server with Bearer Token -> server multiplexer directs route -> authenticate -> authorize action (start, stop) -> authorize linux command (job starting only) -> execute command -> response to client. 
+        - TLS handshake -> client makes request to server with Bearer Token -> server multiplexer directs route -> authenticate -> authorize action (start, stop) -> execute command -> response to client. 
     - Authentication:
         - Use Bearer Token authentication by checking the HTTP header's auth field for a token and finding the `User` in `userMap`
     - Authorization:
-        - Two separate authorizations: api action (start, stop, status, output) and command (ls, grep, rm)
-        - The server will maintain a `rolePermissions` map in the format `{Permission Level : {job : isAllowed}}` for task authorization
-        - The linux command authorization will only be checked if a job is starting and will check the `commandPermissions` map
+        - The server will maintain a `rolePermissions` map in the format `{Permission Level : {job : isAllowed}}` for task authorization based on the `User.Role` field
     - Auth Middleware:
         - The authMiddleware function will be called with the appropriate `action` to validate if user can perform a requested api action. 
     - HTTPS:
         - Generate and hard code self signed certificate, client skips verification
     - Notes:
-        - Decided to include both role based authz (viewer cannot stop job or start job) as well as command based authz (regular user cannot run `rm` but can run `ls`) for a small amount of added security. Will omit one if requested.
         - Tokens for 3 user roles will be premade for demo: `admin`, `user`, `viewer`
 3. **Client**
     - Data Structures:
