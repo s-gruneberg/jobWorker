@@ -8,19 +8,20 @@
 ## Component Details
 1. **Worker Library**
     - Data Structures: 
-        - `Job` struct with fields like ID, status, output, cancel
+        - `Job` struct with fields like ID, status, output, cancel, pointer to exec.Cmd
         - `jobMap`, `jobLock`: Mapping from `ID` to `Job`, and a read/write lock `sync.RWMutex` 
     - Functions to perform tasks from the API (all public):
         - `Start()`, `Stop()`, `Status()`, `Output()`
     - Notes:
         - Will use Google's UUID package for generating job ID's 
         - When a command is started via `Start()` it will be given a context with cancel for termination in the `Stop()` function
+        - Will lock `jobMap` appropriately to prevent data races but allow concurrent reads
 2. **Server**
     -  Data Structures: 
-        -  `Token` struct with fields for `TokenID string` and `Role string`
-        -  `tokenMap map[string]Token` a map of `Token` structs that are set to default values
-        -  `rolePermissions map[string]map[string]bool` a map to authorize api actions based on `Token.role` 
-        -  `commandPermissions map[string][]string` maps `role` to a list of linux commands that role can run
+        -  `User` struct with fields for `TokenID string` and `Role string`
+        -  `userMap map[string]User` key is `TokenID` val is `User`
+        -  `rolePermissions map[string]map[string]bool` a map to authorize api actions based on `User.role` 
+        -  `commandPermissions map[string][]string` maps `User.role` to a list of linux commands that role can run
         -  `mux` a multiplexer to route API using `http.NewServeMux()`
     - Functions: 
         - `handleStartJob(w http.ResponseWriter, r *http.Request)`, `handleStopJob()`, `handleGetJobStatus()`, `handleGetJobOutput()`: helper functions for handling parsing and executing api routes
@@ -31,7 +32,7 @@
     - Auth Workflow Overview: 
         - TLS handshake -> client makes request to server with Bearer Token -> server multiplexer directs route -> authenticate -> authorize action (start, stop) -> authorize linux command (job starting only) -> execute command -> response to client. 
     - Authentication:
-        - Use Bearer Token authentication by checking the HTTP header's auth field for a token and finding the `Token` in `tokenMap`
+        - Use Bearer Token authentication by checking the HTTP header's auth field for a token and finding the `User` in `userMap`
     - Authorization:
         - Two separate authorizations: api action (start, stop, status, output) and command (ls, grep, rm)
         - The server will maintain a `rolePermissions` map in the format `{Permission Level : {job : isAllowed}}` for task authorization
@@ -43,7 +44,6 @@
     - Notes:
         - Decided to include both role based authz (viewer cannot stop job or start job) as well as command based authz (regular user cannot run `rm` but can run `ls`) for a small amount of added security. Will omit one if requested in design review
         - Tokens for 3 user roles will be premade for demo: `admin`, `user`, `viewer`
-        - Jobs stored in memory, no persistance
 3. **Client**
     - Data Structures:
         - `Client` type containing `token`, `baseURL`, and `http.Client`
