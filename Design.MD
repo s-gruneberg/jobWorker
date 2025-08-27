@@ -3,7 +3,7 @@
 ## Proposed API
 - Four endpoints: `/jobs/start`, `/jobs/stop/{id}`, `/jobs/status/{id}`, `/jobs/output/{id}`
 - If the server is running on `https://localHost:8443`, the endpoint for start would be `https://localHost:8443/jobs/start`
-- `"/jobs/"` prefix included to delineate this API from other possible future tasks on server
+- `"/jobs/"` prefix included to delineate this API from other possible endpoints, e.g. `/users/` 
 
 ## Component Details
 1. **Worker Library**
@@ -19,59 +19,60 @@
     -  Data Structures: 
         -  `Token` struct with fields for `TokenID string` and `Role string`
         -  `tokenMap map[string]Token` a map of `Token` structs that are set to default values
-        -  `rolePermissions map[string]map[string]bool` a map to authorize api actions based on `Token.role`. 3 roles: `admin`, `user`, `viewer`
+        -  `rolePermissions map[string]map[string]bool` a map to authorize api actions based on `Token.role` 
         -  `commandPermissions map[string][]string` maps `role` to a list of linux commands that role can run
         -  `mux` a multiplexer to route API using `http.NewServeMux()`
     - Functions: 
-        - `handleStartJob(w http.ResponseWriter, r *http.Request)`, `handleStopJob()`, `handleGetJobStatus()`, `handleGetJobOutput()`
-        - `authenticate(r *http.Request) (string, bool)` Authenticate function which extracts the token and checks if it is in the `tokenMap`
-        - `authorizeAction(role, action string) bool` Authorizes if a user can perform an api action (start, stop)
+        - `handleStartJob(w http.ResponseWriter, r *http.Request)`, `handleStopJob()`, `handleGetJobStatus()`, `handleGetJobOutput()`: helper functions for handling parsing and executing api routes
+        - `authenticate(r *http.Request) bool` Authenticate function which extracts the token and checks if it is in the `tokenMap`
+        - `authorizeAction(role, action string) bool` Checks if a user can perform an api action (start, stop)
         - `authorizeCommand(role, command string) bool` Checks if a linux command is allowed for a given role
-        - `authMiddleware(action string)` Authenticates user and authorizes action (start, stop, output)
+        - `authMiddleware(action string)` Authenticates user and authorizes action (but not command)
     - Auth Workflow Overview: 
         - TLS handshake -> client makes request to server with Bearer Token -> server multiplexer directs route -> authenticate -> authorize action (start, stop) -> authorize linux command (job starting only) -> execute command -> response to client. 
     - Authentication:
-        - Use Bearer Token authentication by checking the HTTP header's Bearer field for a `Token` and finding the `Token` in `tokenMap`
+        - Use Bearer Token authentication by checking the HTTP header's auth field for a token and finding the `Token` in `tokenMap`
     - Authorization:
-        - Two separate authorizations: action (start, stop, status) and command (ls, grep, rm)
+        - Two separate authorizations: api action (start, stop, status, output) and command (ls, grep, rm)
         - The server will maintain a `rolePermissions` map in the format `{Permission Level : {job : isAllowed}}` for task authorization
-        - The linux command authorization will only be checked if a job is starting, so that will be authorized inside `handleStartJob()`
+        - The linux command authorization will only be checked if a job is starting and will check the `commandPermissions` map
     - Auth Middleware:
         - The authMiddleware function will be called with the appropriate `action` to validate if user can perform a requested api action. 
     - HTTPS:
-        - Generate and hard code self signed certificate, client skips validation
+        - Generate and hard code self signed certificate, client skips verification
     - Notes:
-        - Decided to include both role based authz (viewer cannot stop job or start job) as well as command based authz (regular user cannot run `rm` but can run `ls`).
-        - Tokens for 3 user roles will be pre-made for demo
+        - Decided to include both role based authz (viewer cannot stop job or start job) as well as command based authz (regular user cannot run `rm` but can run `ls`) for a small amount of added security. Will omit one if requested in design review
+        - Tokens for 3 user roles will be premade for demo: `admin`, `user`, `viewer`
+        - Jobs stored in memory, no persistance
 3. **Client**
     - Data Structures:
         - `Client` type containing `token`, `baseURL`, and `http.Client`
     - Functions: Most functions will act on the `Client` type as a method
-        - `MakeClient` called in main with parsed command line arguments `-token` and `-server` to create a new client
-        - `(c *Client) makeRequest()` helper function that builds and sends a request to the client 
-        - `StartJob(command string, args []string) (string, error)` starts a job with given parameters
-        - `StopJob(id string)` stops the job with id 
-        - `GetStatus(id string)` gets status of job with id
-        - `GetOutput(id string)` gets output of job with id
+        - `MakeClient` called in main with parsed command line flags `-token` and `-server`, creates new `Client`
+        - `(c *Client) makeRequest()` helper function that builds and sends a request to the server, called within following helpers 
+            - `StartJob(command string, args []string) (string, error)` starts a job with given parameters
+            - `StopJob(id string)` stops the job with id 
+            - `GetStatus(id string)` gets status of job with id
+            - `GetOutput(id string)` gets output of job with id
     - Workflow: (Assumes server is running)
         - `main()` makes a new client, sets flagged variables or defaults to admin token and default server path `https://localhost:8443` (for demo)
         - Parses args
         - Uses a switch statement for `args[0]`: start, stop, status, output
-        - Sends request to server based on `args[0]`
-        - Returns a confirmation to the user (or error)
+        - Calls appropriate helper, which sends request to server and returns a response
+        - Return a response, error, or confirmation to user
     - Notes:
-        - Decided to make a client type in order to have the user token and server URL be alterable
+        - Decided to make a client type in order to have the user token and server URL be alterable from CLI
 
 ## Security Considerations
-- Uses self signed certificates, and client bypasses verification (for the demo)
+- Uses self signed certificates, and client bypasses verification
 - Bearer tokens are stored unencrypted in memory, they never expire or rotate
-- User can run any linux command that their command privilege level allows 
-- There is no input validation or sanitization, potential for injection attacks.  
+- User can run any linux command their privilege level allows means potential for malicious commands
+- No input validation means a potential for injection attacks  
 - No sandbox or containerization on the server, client can access server's file system
-- No user logging (can't tell who ran what command -> no accountability)
-- No job timeout or job resource limitation
+- No job timeout or job resource limitation (I considered role based default timeout for jobs but thought it was too much)
 
-## CLI UX   
+## CLI UX
+Will likely be modified during development to be more user friendly (better spacing, etc)   
 ```
             $~jobWorker start echo "Hello World"
             Job started with ID 4c20a846-a780-4378-88bc-2447eb072811 
