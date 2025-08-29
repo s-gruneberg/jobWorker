@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/s-gruneberg/jobWorker/internal/jobworker"
@@ -44,6 +45,10 @@ type StartJobRequest struct {
 }
 
 type StartJobResponse struct {
+	JobID string `json:"job_id"`
+}
+
+type StopJobResponse struct {
 	JobID string `json:"job_id"`
 }
 
@@ -150,4 +155,99 @@ func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(StatusResponse{Status: status})
 
+}
+
+func handleStopJob(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+	pathParts := strings.Split(r.URL.Path, "/")
+	if len(pathParts) < 4 { // base/jobs/output/id
+		http.Error(w, "Invalid URL - missing job ID", http.StatusBadRequest)
+		return
+	}
+	// base/jobs/output/id
+	id := pathParts[3]
+	if id == "" {
+		http.Error(w, "Invalid URL - empty job ID", http.StatusBadRequest)
+		return
+	}
+	err := jobworker.Stop(id)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Job not found: %v", err), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(StopJobResponse{JobID: id})
+}
+
+func isAuthorized(role, action string) bool {
+	actions, ok := rolePermissions[role]
+	if !ok {
+		return false
+	}
+	return actions[action]
+}
+
+func authMiddleware(action string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth := r.Header.Get("Authorization")
+			if auth == "" {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			if !strings.HasPrefix(auth, "Bearer ") {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			token := auth[7:]
+			if token == "" {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			if _, exists := tokens[token]; !exists {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			role := ""
+			if t, exists := tokens[token]; exists {
+				role = t.Role
+			}
+
+			if role == "" {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if !isAuthorized(role, action) {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func main() {
+	mux := http.NewServeMux()
+
+	mux.Handle("/jobs/start", authMiddleware("start")(http.HandlerFunc(handleStartJob)))
+	mux.Handle("/jobs/stop/", authMiddleware("stop")(http.HandlerFunc(handleStopJob)))
+	mux.Handle("/jobs/status/", authMiddleware("status")(http.HandlerFunc(handleGetStatus)))
+	mux.Handle("/jobs/output/", authMiddleware("output")(http.HandlerFunc(handleGetOutput)))
+
+	if _, err := os.Stat("cert.pem"); err != nil {
+		panic("cert.pem not found - HTTPS is required")
+	}
+	if _, err := os.Stat("key.pem"); err != nil {
+		panic("key.pem not found - HTTPS is required")
+	}
+
+	if err := http.ListenAndServeTLS(":8080", "cert.pem", "key.pem", mux); err != nil {
+		panic(err)
+	}
 }
