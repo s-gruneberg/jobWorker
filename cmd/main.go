@@ -98,3 +98,56 @@ func handleStartJob(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(StartJobResponse{JobID: id})
 }
+
+func handleGetOutput(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	pathParts := strings.Split(r.URL.Path, "/")
+	if len(pathParts) < 4 { // base/jobs/output/id
+		http.Error(w, "Invalid URL - missing job ID", http.StatusBadRequest)
+		return
+	}
+	// base/jobs/output/id
+	id := pathParts[3]
+	if id == "" {
+		http.Error(w, "Invalid URL - empty job ID", http.StatusBadRequest)
+		return
+	}
+
+	stdout, stderr, err := jobworker.GetOutput(id)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Job not found: %v", err), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(OutputResponse{Stdout: stdout, Stderr: stderr})
+}
+
+func handleGetStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	pathParts := strings.Split(r.URL.Path, "/")
+	if len(pathParts) < 4 { // base/jobs/output/id
+		http.Error(w, "Invalid URL - missing job ID", http.StatusBadRequest)
+		return
+	}
+	// base/jobs/output/id
+	id := pathParts[3]
+	if id == "" {
+		http.Error(w, "Invalid URL - empty job ID", http.StatusBadRequest)
+		return
+	}
+	status, err := jobworker.GetStatus(id)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Job not found: %v", err), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(StatusResponse{Status: status})
+
+}
