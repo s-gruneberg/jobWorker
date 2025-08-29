@@ -79,7 +79,7 @@ func Start(command string, args ...string) (string, error) {
 		}
 	}()
 
-	return job.Status, nil
+	return job.ID, nil
 }
 
 func GetOutput(id string) (string, string, error) {
@@ -120,4 +120,22 @@ func Stop(id string) error {
 	job.cancel()
 	job.Status = "Stopped"
 	return nil
+}
+
+// for testing only
+func clear() {
+	jobsMu.Lock()
+	defer jobsMu.Unlock()
+
+	for _, job := range jobs {
+		if job.Status == "Running" {
+			job.cancel()
+		}
+	}
+
+	for k := range jobs {
+		delete(jobs, k)
+	}
+
+	nextID = 1
 }
