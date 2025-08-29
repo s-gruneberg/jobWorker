@@ -103,3 +103,21 @@ func GetStatus(id string) (string, error) {
 	}
 	return job.Status, nil
 }
+
+func Stop(id string) error {
+	jobsMu.Lock()
+	defer jobsMu.Unlock()
+
+	job, ok := jobs[id]
+	if !ok {
+		return fmt.Errorf("job not found")
+	}
+
+	if job.Status != "Running" {
+		return fmt.Errorf("job not running")
+	}
+
+	job.cancel()
+	job.Status = "Stopped"
+	return nil
+}
