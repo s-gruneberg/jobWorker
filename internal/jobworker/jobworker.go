@@ -3,6 +3,7 @@ package jobworker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os/exec"
 	"strconv"
 	"sync"
@@ -12,7 +13,7 @@ type Job struct {
 	ID       string   `json:"id"`
 	Command  string   `json:"command"`
 	Args     []string `json:"args"`
-	Status   string   `json:"status`
+	Status   string   `json:"status"`
 	ExitCode *int     `json:"exit_code,omitempty"`
 	Stdout   string   `json:"stdout"`
 	Stderr   string   `json:"stderr"`
@@ -78,5 +79,27 @@ func Start(command string, args ...string) (string, error) {
 		}
 	}()
 
+	return job.Status, nil
+}
+
+func GetOutput(id string) (string, string, error) {
+	jobsMu.RLock()
+	defer jobsMu.RUnlock()
+
+	job, ok := jobs[id]
+	if !ok {
+		return "", "", fmt.Errorf("job not found")
+	}
+	return job.Stdout, job.Stderr, nil
+}
+
+func GetStatus(id string) (string, error) {
+	jobsMu.RLock()
+	defer jobsMu.RUnlock()
+
+	job, ok := jobs[id]
+	if !ok {
+		return "", fmt.Errorf("job not found")
+	}
 	return job.Status, nil
 }
