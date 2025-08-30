@@ -123,7 +123,7 @@ func Stop(id string) error {
 }
 
 // for testing only
-func clear() {
+func Clear() {
 	jobsMu.Lock()
 	defer jobsMu.Unlock()
 
