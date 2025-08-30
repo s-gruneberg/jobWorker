@@ -111,11 +111,10 @@ func handleGetOutput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pathParts := strings.Split(r.URL.Path, "/")
-	if len(pathParts) < 4 { // base/jobs/output/id
+	if len(pathParts) < 4 {
 		http.Error(w, "Invalid URL - missing job ID", http.StatusBadRequest)
 		return
 	}
-	// base/jobs/output/id
 	id := pathParts[3]
 	if id == "" {
 		http.Error(w, "Invalid URL - empty job ID", http.StatusBadRequest)
@@ -137,11 +136,10 @@ func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pathParts := strings.Split(r.URL.Path, "/")
-	if len(pathParts) < 4 { // base/jobs/output/id
+	if len(pathParts) < 4 {
 		http.Error(w, "Invalid URL - missing job ID", http.StatusBadRequest)
 		return
 	}
-	// base/jobs/output/id
 	id := pathParts[3]
 	if id == "" {
 		http.Error(w, "Invalid URL - empty job ID", http.StatusBadRequest)
@@ -163,11 +161,10 @@ func handleStopJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pathParts := strings.Split(r.URL.Path, "/")
-	if len(pathParts) < 4 { // base/jobs/output/id
+	if len(pathParts) < 4 {
 		http.Error(w, "Invalid URL - missing job ID", http.StatusBadRequest)
 		return
 	}
-	// base/jobs/output/id
 	id := pathParts[3]
 	if id == "" {
 		http.Error(w, "Invalid URL - empty job ID", http.StatusBadRequest)
