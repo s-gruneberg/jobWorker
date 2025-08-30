@@ -248,6 +248,7 @@ func main() {
 		panic("key.pem not found - HTTPS is required")
 	}
 
+	fmt.Println("Server starting on https://localhost:8080")
 	if err := http.ListenAndServeTLS(":8080", "cert.pem", "key.pem", mux); err != nil {
 		panic(err)
 	}
