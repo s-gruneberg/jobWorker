@@ -6,7 +6,7 @@ import (
 )
 
 func TestStartAndStatus(t *testing.T) {
-	clear()
+	Clear()
 
 	id, err := Start("echo", "hello", "world")
 	if err != nil {
@@ -30,7 +30,7 @@ func TestStartAndStatus(t *testing.T) {
 }
 
 func TestStartMultipleJobs(t *testing.T) {
-	clear()
+	Clear()
 
 	id1, _ := Start("echo", "job1")
 	id2, _ := Start("echo", "job2")
@@ -56,7 +56,7 @@ func TestStartMultipleJobs(t *testing.T) {
 }
 
 func TestStopJob(t *testing.T) {
-	clear()
+	Clear()
 
 	id, err := Start("sleep", "10")
 	if err != nil {
@@ -80,7 +80,7 @@ func TestStopJob(t *testing.T) {
 }
 
 func TestGetOutput(t *testing.T) {
-	clear()
+	Clear()
 
 	id, err := Start("echo", "hello world")
 	if err != nil {
